@@ -2,32 +2,37 @@ import argparse
 import os
 import time
 import csv
+import traceback
 from subprocess import Popen, PIPE
+from copy import deepcopy
+from pathlib import Path
 
 class Marker:
     def __init__(self):
-        self.mExtension = '.java'
-        self.mCompiler = 'javac'
-        self.mRun = 'java'
-        self.mEditor = 'gvim'
-        self.mEditorArgs = ['-o']
-        self.mIsInterpreted = False
+        self.fileExtension = '.java'
+        self.compiler = 'javac'
+        self.run = 'java'
+        self.editor = 'gvim'
+        self.editorArgs = ['-o']
+        self.isInterpreted = False
 
     def compileFile(self, name):
-        compileProc = Popen([self.mCompiler, name], stdout = PIPE, 
+        compileProc = Popen([self.compiler, name], stdout = PIPE, 
                             stdin = PIPE, stderr = PIPE)
         compileOut, compileErr = compileProc.communicate()
         compileCode = compileProc.returncode
-        compileOut = compileOut.decode('ascii').replace('\r\n', '\n')
-        compileErr = compileErr.decode('ascii').replace('\r\n', '\n')
+        compileOut = compileOut.decode('utf-8', 'backslashreplace').replace(
+            '\r\n', '\n')
+        compileErr = compileErr.decode('utf-8', 'backslashreplace').replace(
+            '\r\n', '\n')
         return compileCode, compileErr, compileOut
 
     def runFile(self, name, args = ''):
-        runProc = Popen([self.mRun, name], stdout = PIPE, stdin = PIPE, stderr = PIPE)
+        runProc = Popen([self.run, name], stdout = PIPE, stdin = PIPE, stderr = PIPE)
         runOut, runErr = runProc.communicate(input = str.encode(args))
         runCode = runProc.returncode
-        runOut = runOut.decode('ascii').replace('\r\n', '\n')
-        runErr = runErr.decode('ascii').replace('\r\n', '\n')
+        runOut = runOut.decode('utf-8', 'backslashreplace').replace('\r\n', '\n')
+        runErr = runErr.decode('utf-8', 'backslashreplace').replace('\r\n', '\n')
         return runCode, runErr, runOut
 
 
@@ -37,11 +42,11 @@ class Marker:
 
         # Grab all the files that have the required extension and compile them.
         for entry in bundle[-1]:
-            if self.mExtension not in entry.name:
+            if self.fileExtension not in entry.name:
                 continue
 
             fileList.append(entry.name)
-            if not self.mIsInterpreted:
+            if not self.isInterpreted:
                 compileCode, compileErr, compileOut = self.compileFile(entry.name)
                 if compileCode is 0:
                     name = entry.name[:-5]
@@ -124,10 +129,48 @@ class Marker:
 
         return header, grades
 
+    def incrementalWrite(self, table, rubric, rootDir):
+        header, grades = self.formatForCSV(table, rubric)
+        csvFile = os.path.join(rootDir, 'grades_inc.csv')
+
+        with open(csvFile, 'w+', newline = '\n') as file:
+            writer = csv.writer(file)
+            writer.writerow(header)
+            writer.writerows(grades)
+
+    def loadIncrementalFile(self, file, masterRubric):
+        count = 0
+        table = {}
+        with open(file, 'r') as file:
+            reader = csv.reader(file)
+            header = next(reader)
+            for line in reader:
+                count += 1
+                rubric = {}
+                for i in range(1, len(header) - 2):
+                    maxVal = masterRubric[header[i]][1]
+                    rubric[header[i]] = [float(line[i]), maxVal]
+                comments = line[-1]
+                table[line[0]] = [rubric, comments]
+
+        return table, count
+
     def mark(self, rootDir, rubric, args = '', studentTable = ''):
         table = {}
+        # Check if we have a partial file already.
+        incPath = os.path.join(rootDir, 'grades_inc.csv')
+        incFile = Path(incPath)
+        start = 0
+        if incFile.is_file():
+            # We do, so let's count the number of lines in the file.
+            table, start = self.loadIncrementalFile(incFile, rubric)
+
+        count = 0
         for entry in os.scandir(rootDir):
             if not entry.is_dir():
+                continue
+            if start is not 0:
+                start -= 1
                 continue
 
             name = entry.name
@@ -136,7 +179,14 @@ class Marker:
             bundle = [submission]
 
             os.chdir(subPath)
-            list = self.parseBundle(bundle, args)
+            try:
+                list = self.parseBundle(bundle, args)
+            except Exception as e:
+                print('Error in entry {}.'.format(count))
+                print('Path: {}'.format(subPath))
+                print(traceback.format_exc())
+                self.incrementalWrite(table, rubric, rootDir)
+                continue
 
             # Now make the file that contains the marking rubric.
             with open('rubric.txt', 'w+') as rubricFile:
@@ -149,11 +199,12 @@ class Marker:
                 rubricFile.write('')
 
             list.append('rubric.txt')
-            editorProc = Popen([self.mEditor] + self.mEditorArgs + list)
+            editorProc = Popen([self.editor] + self.editorArgs + list)
             editorProc.communicate()
 
             # The grader has now entered the grades and comments, so lets 
             # re-open the file and update the marks.
+            studentRubric = deepcopy(rubric)
             with open('rubric.txt', 'r+') as rubricFile:
                 header = 0
                 comments = []
@@ -168,16 +219,16 @@ class Marker:
                     tokens = line.split(':')
                     item = tokens[0]
                     vals = tokens[1].split('/')
-                    rubric[item][0] = int(vals[0])
+                    studentRubric[item][0] = float(vals[0])
 
             comments = ' '.join(comments)
 
-            table[name] = [rubric, comments]
-
+            table[name] = [studentRubric, comments]
+            self.incrementalWrite(table, rubric, rootDir)
             os.remove('rubric.txt')
             os.remove('out.txt')
 
-            return self.formatForCSV(table, rubric, studentTable)
+        return self.formatForCSV(table, rubric, studentTable)
 
 def readRubric(filename):
     # First check if the file actually exists.
@@ -190,6 +241,8 @@ def readRubric(filename):
     with open(filename) as file:
         for count, line in enumerate(file):
             if line.startswith('#'):
+                continue
+            if not line.strip():
                 continue
             tokens = line.split(':')
 
@@ -244,14 +297,24 @@ def convertPaths(path, join = False):
 
     return dir
 
-def printSummary(header, grades, dir):
+def printSummary(dir):
     outName = os.path.join(dir, 'summary.txt')
+    csvName = os.path.join(dir, 'grades.csv')
+    csvPath = Path(csvName)
+    if not csvPath.is_file():
+        print('Error: A summary can only be generated once all assignments are'
+              ' graded')
+        return
+
     with open(outName, 'w+', newline = '\n') as outFile:
-        for grade in grades:
-            outFile.write('#==============================#\n')
-            for i in range(len(header)):
-                outFile.write('{}: {}\n'.format(header[i], grade[i]))
-            outFile.write('\n')
+        with open(csvPath, 'r') as csvFile:
+            reader = csv.reader(csvFile)
+            header = next(reader)
+            for line in reader:
+                outFile.write('#==============================#\n')
+                for i in range(len(header)):
+                    outFile.write('{}: {}\n'.format(header[i], line[i]))
+                outFile.write('\n')
 
 def main():
     parser = argparse.ArgumentParser(description = 
@@ -282,6 +345,10 @@ def main():
     if args.dir == None:
         return
 
+    if args.summary:
+        printSummary(convertPaths(args.dir, True))
+        return
+
     if args.rubric == None:
         print('Please provide a marking rubric to use.')
         return
@@ -295,6 +362,7 @@ def main():
 
     # Let's first make the path for the root directory a path
     dir = convertPaths(args.dir, True)
+
     
     tablePath = args.table
     if tablePath:
@@ -302,6 +370,7 @@ def main():
 
     startTime = time.time()
     marker = Marker()
+    marker.editorArgs = []
     header, grades = marker.mark(dir, rubric, studentTable = tablePath)
     elapsed = time.time() - startTime
     m, s = divmod(elapsed, 60)
@@ -315,8 +384,6 @@ def main():
         writer.writerow(header)
         writer.writerows(grades)
 
-    if args.summary:
-        printSummary(header, grades, dir)
 
 if __name__ == '__main__':
     main()
