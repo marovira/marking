@@ -307,6 +307,65 @@ def convertPaths(path, join = False):
 
     return dir
 
+def makeComments(grades, root):
+    for entry in os.scandir(root):
+        if not entry.is_dir():
+            continue
+
+        # We need to find the appropriate rubric.
+        name = entry.name
+        try:
+            studentRubric = next(x for x in grades if x.studentName == name)
+        except Exception as e:
+            # If we can't find the student name in our list of marks, then
+            # either they submitted nothing or they submitted garbage, so 
+            # skip them.
+            continue
+
+        # Now switch into the students directory.
+        os.chdir(entry.path)
+
+        # Now we have to generate the comments.txt file.
+        with open('comments.txt', 'w+', newline = '\n') as file:
+            file.write('<pre>#=============================#\n')
+            file.write('# Instructor\'s comments\n')
+            file.write('#=============================#\n')
+            i = 0
+            for item, mark in studentRubric.attributes.items():
+                file.write('{}: {}/{}\n'.format(item, mark,
+                                                studentRubric.maxVals[i]))
+                i += 1
+
+            file.write('Total: {}\n'.format(studentRubric.total))
+            file.write('Comments:\n{}'.format(studentRubric.comments))
+
+def makeCSV(grades, root):
+    filePath = os.path.join(root, 'grades.csv')
+    rows = []
+    with open(filePath, 'r+') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            rows.append(row)
+
+    # Now fill in the total mark.
+    for i in range(3, len(rows)):
+        id = rows[i][1]
+        lastName = rows[i][2]
+        firstName = rows[i][3]
+
+        name = lastName + ', ' + firstName + '(' + id + ')'
+        try:
+            studentRubric = next(x for x in grades if x.studentName == name)
+        except Exception as e:
+            continue
+
+        rows[i][-1] = studentRubric.total
+
+    # Now let's write out the csv file.
+    with open(filePath, 'w+', newline = '\n') as file:
+        writer = csv.writer(file)
+        writer.writerows(rows)
+
 def readConfigFile(path):
     config = configparser.ConfigParser()
     config.read(path)
@@ -353,9 +412,6 @@ def readConfigFile(path):
         rubric.maxVals.append(config['Rubric'].getfloat(key))
 
     return conf, marker, rubric
-
-
-
 
 def makeSampleConfig():
     with open('sample.ini', 'w+') as file:
@@ -408,7 +464,15 @@ def main():
 
     # Now that we have the path, let's start setting things up.
     conf, marker, rubric = readConfigFile(configPath)
-    marker.mark(conf.root, rubric)
+    grades = marker.mark(conf.root, rubric)
+
+    # Check if we have to generate the csv files and comment files
+    if conf.makeComments:
+        makeComments(grades, conf.root)
+
+    if conf.makeCSV:
+        makeCSV(grades, conf.root)
+
 
 if __name__ == '__main__':
     main()
