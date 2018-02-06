@@ -239,8 +239,8 @@ class Marker:
             subPath = os.path.join(entry.path, 'Submission attachment(s)')
             submission = [file for file in os.scandir(subPath) if file.is_file()]
             bundle = [submission]
-
             os.chdir(subPath)
+
             try:
                 list = self.parseSubmission(bundle)
             except Exception as e:
@@ -292,6 +292,15 @@ class Marker:
             self.writeIncremental(table, rubric, rootDir)
             os.remove('rubric.txt')
             os.remove('out.txt')
+
+            # Check if we need to remove anything else from the student 
+            # directory.
+            deleteFiles = [file for file in os.scandir(subPath) if file.is_file()]
+            fileNames = [entry.name for entry in submission]
+            for file in deleteFiles:
+                if file.name in fileNames:
+                    continue
+                os.remove(file)
 
         return table
 
@@ -472,6 +481,13 @@ def main():
 
     if conf.makeCSV:
         makeCSV(grades, conf.root)
+
+    # Only remove the incremental file if we have written everything to
+    # the CSV and comment files.
+    if conf.makeComments and conf.makeCSV:
+        path = os.path.join(conf.root, 'grades_inc.csv')
+        os.remove(path)
+
 
 
 if __name__ == '__main__':
