@@ -135,7 +135,7 @@ class Marker:
                         outFile.write('#=============================#\n')
                         outFile.write('# File: {}\n'.format(entry.name))
                         outFile.write('#=============================#\n')
-                        outFile.write('For file{}:\n'.format(entry.name))
+                        outFile.write('For file {}:\n'.format(entry.name))
                         outFile.write(
                             'Compilation error: return code {}\n\n'.format(
                                 compileCode))
@@ -151,7 +151,7 @@ class Marker:
                         outFile.write('#=============================#\n')
                         outFile.write('# File: {}\n'.format(entry.name))
                         outFile.write('#=============================#\n')
-                        outFile.write('For file{}:\n'.format(entry.name))
+                        outFile.write('For file {}:\n'.format(entry.name))
                         outFile.write('Compilation successful\n\n')
                         outFile.write('Program return code: {}\n'.format(runCode))
                         outFile.write('#=============================#\n')
@@ -290,8 +290,15 @@ class Marker:
             studentRubric.addMarks()
             table.append(studentRubric)
             self.writeIncremental(table, rubric, rootDir)
-            os.remove('rubric.txt')
-            os.remove('out.txt')
+            try:
+                os.remove('rubric.txt')
+            except:
+                pass
+
+            try:
+                os.remove('out.txt')
+            except:
+                pass
 
             # Check if we need to remove anything else from the student 
             # directory.
