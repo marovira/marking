@@ -11,6 +11,7 @@ from difflib import Differ
 class Marker:
     def __init__(self):
         self.extension = ''
+        self.generatedExtension = ''
         self.isInterpreted = False
         self.compiler = ''
         self.run = ''
@@ -82,7 +83,8 @@ class Marker:
             fileList.append(entry.name)
 
             if not self.isInterpreted:
-                compileCode, compileErr, compileOut = self.compileFile(entry.name)
+                compileCode, compileErr, compileOut = self.compileFile(
+                        entry.name)
                 if compileCode is 0:
                     name = entry.name[:-len(self.extension)]
                     # TODO: Add support for multiple input files.
@@ -108,30 +110,38 @@ class Marker:
                         if len(diffResult) != len(master):
                             diffCode = 1
 
-                with open(summaryFile, 'w', newline = '\n') as sFile:
-                    sFile.write('#=============================#\n')
+                if os.path.exists(summaryFile):
+                    mode = 'a'
+                else:
+                    mode = 'w'
+
+                with open(summaryFile, mode, newline = '\n') as sFile:
+                    sFile.write('#=========================================#\n')
                     sFile.write('# Summary for file {}\n'.format(entry.name))
-                    sFile.write('#=============================#\n')
-                    sFile.write('\n')
+                    sFile.write('#=========================================#\n')
 
                     if compileCode is not 0:
-                        sFile.write('Compilation error: return code {}\n\n'.format(
+                        sFile.write('Compilation error: return code {}\n'.format(
                             compileCode))
                         sFile.write('{}\n\n'.format(compileErr))
                         sFile.write('{}\n\n'.format(compileOut))
                     else:
                         sFile.write('Compilation succesful\n')
-                        sFile.write('Program return code: {}\n'.format(runCode))
+                        sFile.write('Program return code: {}\n\n'.format(runCode))
 
                     if self.diff:
                         if diffCode is 0:
-                            sFile.write('Diff results: outputs are identical.\n')
+                            sFile.write('Diff results: outputs are identical.\n\n')
                         else:
                             sFile.write('Diff results:\n')
                             sFile.writelines(diffResult)
+                            sFile.write('\n')
                     else:
+                        sFile.write('# Output for {}\n'.format(entry.name))
+                        sFile.write('#=============================#\n')
                         sFile.write('stdout:\n{}\n\n'.format(runOut))
-                        sFile.write('stderr:{}\n\n'.format(runErr))
+                        sFile.write('#=============================#\n')
+                        sFile.write('stderr:\n{}\n\n'.format(runErr))
             else:
                 # TODO: Add support for interpreted languages.
                 print('Error: interpreted languages are not supported yet.')
@@ -146,7 +156,7 @@ class Marker:
             header.append(item)
 
         header.append('Total')
-        headler.append('Comments')
+        header.append('Comments')
 
         grades = []
         for entry in table:
@@ -193,8 +203,16 @@ class Marker:
         incPath = os.path.join(rootDir, 'grades_inc.csv')
         incFile = Path(incPath)
         start = 0
-        if inFile.is_file():
+        if incFile.is_file():
             table, start = self.loadIncremental(incFile, rubric)
+
+        # Next, check copy over any input and output files to the working
+        # directory.
+        for file in self.inputFiles:
+            shutil.copy2(file, self.workingDir)
+
+        for file in self.outputFiles:
+            shutil.copy2(file, self.workingDir)
 
         count = 0
         for entry in os.scandir(rootDir):
@@ -263,7 +281,7 @@ class Marker:
                     
                     tokens = line.split(':')
                     item = tokens[0]
-                    vals = tokes[1].split('/')
+                    vals = tokens[1].split('/')
                     studentRubric.attributes[item] = float(vals[0])
 
             comments = ' '.join(comments)
@@ -281,5 +299,19 @@ class Marker:
             except:
                 pass
 
-            # TODO: remove any additional files here.
+            for file in list:
+                if file == 'rubric.txt' or file == 'summary.txt':
+                    continue
+                os.remove(file)
+
+            # Now remove any generated files.
+            for file in os.scandir(self.workingDir):
+                if not file.is_file():
+                    continue
+                if self.generatedExtension not in file.name:
+                    continue
+                os.remove(file)
+
+            print('Done')
+
         return table
