@@ -8,7 +8,7 @@ class Process:
         self.procArgs = []
 
     def run(self):
-        proc = Popen([self.procName] + [self.procArgs])
+        proc = Popen([self.procName] + self.procArgs)
         proc.communicate()
 
 class Config:
@@ -34,6 +34,7 @@ class Rubric:
         self.attributes = {}
         self.maxVals = []
         self.total = 0
+        self.comments = ''
 
     def make(self, rubric):
         self.studentName = rubric.studentName
