@@ -6,7 +6,7 @@ from subprocess import Popen, PIPE
 from pathlib import Path
 from os.path import basename
 from utils import Config, Editor, Rubric, Process
-from difflib import Differ
+import difflib
 
 class Marker:
     def __init__(self):
@@ -73,6 +73,14 @@ class Marker:
         runErr = self.convertByteString(runErr)
         return runCode, runErr, runOut
 
+    def performDiff(self, expected, ans):
+        diff = list(difflib.context_diff(expected, ans, fromfile = 'expected', 
+                                    tofile = 'received'))
+        if len(diff) is 0:
+            return 0, []
+
+        return 1, diff
+
     def runSubmission(self, submission):
         summaryFile = 'summary.txt'
         fileList = []
@@ -97,7 +105,8 @@ class Marker:
                     outFile = ''
                     for file in self.outputFiles:
                         fName = os.path.splitext(basename(file))[0]
-                        if fName == entry.name:
+                        sName = os.path.splitext(basename(entry.name))[0]
+                        if fName == sName:
                             outFile = file
                             break
 
@@ -105,10 +114,8 @@ class Marker:
                         with open(outFile, 'r') as oFile:
                             master = oFile.readlines()
                         student = runOut.splitlines(keepends = True)
-                        differ = Differ()
-                        diffResult = list(differ.compare(master, student))
-                        if len(diffResult) != len(master):
-                            diffCode = 1
+
+                        diffCode, diffResult = self.performDiff(master, student)
 
                 if os.path.exists(summaryFile):
                     mode = 'a'
@@ -129,13 +136,21 @@ class Marker:
                         sFile.write('Compilation succesful\n')
                         sFile.write('Program return code: {}\n\n'.format(runCode))
 
-                    if self.diff:
-                        if diffCode is 0:
-                            sFile.write('Diff results: outputs are identical.\n\n')
+                    if runCode is 0:
+                        if self.diff:
+                            if diffCode is 0:
+                                sFile.write(
+                                    'Diff results: outputs are identical.\n\n')
+                            else:
+                                sFile.write('Diff results:\n')
+                                sFile.writelines(diffResult)
+                                sFile.write('\n')
                         else:
-                            sFile.write('Diff results:\n')
-                            sFile.writelines(diffResult)
-                            sFile.write('\n')
+                            sFile.write('# Output for {}\n'.format(entry.name))
+                            sFile.write('#=============================#\n')
+                            sFile.write('stdout:\n{}\n\n'.format(runOut))
+                            sFile.write('#=============================#\n')
+                            sFile.write('stderr:\n{}\n\n'.format(runErr))
                     else:
                         sFile.write('# Output for {}\n'.format(entry.name))
                         sFile.write('#=============================#\n')
@@ -200,7 +215,7 @@ class Marker:
         table = []
 
         # Check if we have a partial file already.
-        incPath = os.path.join(rootDir, 'grades_inc.csv')
+        incPath = os.path.join(self.workingDir, 'grades_inc.csv')
         incFile = Path(incPath)
         start = 0
         if incFile.is_file():
@@ -255,6 +270,7 @@ class Marker:
                 for item, mark in rubric.attributes.items():
                     rubricFile.write('{}: {}/{}\n'.format(item, mark,
                         rubric.maxVals[i]))
+                    i += 1
                 rubricFile.write('#==============================#\n')
                 rubricFile.write('# Instructor comments\n')
                 rubricFile.write('#==============================#\n')
