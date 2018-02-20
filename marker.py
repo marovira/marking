@@ -74,12 +74,11 @@ class Marker:
         return runCode, runErr, runOut
 
     def performDiff(self, expected, ans):
-        diff = list(difflib.context_diff(expected, ans, fromfile = 'expected', 
-                                    tofile = 'received'))
-        if len(diff) is 0:
-            return 0, []
-
-        return 1, diff
+        d = difflib.Differ()
+        diff = list(d.compare(expected, ans))
+        if len(diff) != len(expected):
+            return 1, diff
+        return 0, []
 
     def runSubmission(self, submission):
         summaryFile = 'summary.txt'
@@ -143,6 +142,10 @@ class Marker:
                                     'Diff results: outputs are identical.\n\n')
                             else:
                                 sFile.write('Diff results:\n')
+                                sFile.write('Legend:\n')
+                                sFile.write('-: expected\n')
+                                sFile.write('+: received\n')
+                                sFile.write('?: diff results\n\n')
                                 sFile.writelines(diffResult)
                                 sFile.write('\n')
                         else:
