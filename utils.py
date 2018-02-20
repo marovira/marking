@@ -16,6 +16,7 @@ class Config:
         self.root = ''
         self.makceCSV = False
         self.makeComments = False
+        self.workingDir = ''
 
 class Editor:
     def __init__(self):
@@ -25,7 +26,7 @@ class Editor:
     def run(self, files):
         proc = Process()
         proc.procName = self.cmd
-        proc.procArgs = [self.args] + files
+        proc.procArgs = self.args + files
         proc.run()
 
 class Rubric:
@@ -38,7 +39,7 @@ class Rubric:
 
     def make(self, rubric):
         self.studentName = rubric.studentName
-        self.attributes = rubric.attributes
+        self.attributes = deepcopy(rubric.attributes)
         self.maxVals = deepcopy(rubric.maxVals)
         self.total = rubric.total
         self.comments = rubric.comments
