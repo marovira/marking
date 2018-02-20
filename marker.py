@@ -45,7 +45,7 @@ class Marker:
         compileCode = compileProc.returncode
 
         compileOut = self.convertByteString(compileOut)
-        compileOut = self.convertByteString(compileErr)
+        compileErr = self.convertByteString(compileErr)
 
         return compileCode, compileErr, compileOut
 
@@ -97,24 +97,25 @@ class Marker:
                     # TODO: Add support for multiple input files.
                     runCode, runErr, runOut = self.runFile(name)
 
-                diffResult = []
-                diffCode = 0
-                if runCode is 0 and self.diff:
-                    # First load in the output file.
-                    outFile = ''
-                    for file in self.outputFiles:
-                        fName = os.path.splitext(basename(file))[0]
-                        sName = os.path.splitext(basename(entry.name))[0]
-                        if fName == sName:
-                            outFile = file
-                            break
+                    diffResult = []
+                    diffCode = 0
+                    if runCode is 0 and self.diff:
+                        # First load in the output file.
+                        outFile = ''
+                        for file in self.outputFiles:
+                            fName = os.path.splitext(basename(file))[0]
+                            sName = os.path.splitext(basename(entry.name))[0]
+                            if fName == sName:
+                                outFile = file
+                                break
 
-                    if outFile:
-                        with open(outFile, 'r') as oFile:
-                            master = oFile.readlines()
-                        student = runOut.splitlines(keepends = True)
+                        if outFile:
+                            with open(outFile, 'r') as oFile:
+                                master = oFile.readlines()
+                            student = runOut.splitlines(keepends = True)
 
-                        diffCode, diffResult = self.performDiff(master, student)
+                            diffCode, diffResult = self.performDiff(master, 
+                                                                    student)
 
                 if os.path.exists(summaryFile):
                     mode = 'a'
@@ -132,34 +133,35 @@ class Marker:
                         sFile.write('{}\n\n'.format(compileErr))
                         sFile.write('{}\n\n'.format(compileOut))
                     else:
-                        sFile.write('Compilation succesful\n')
+                        sFile.write('Compilation successful\n')
                         sFile.write('Program return code: {}\n\n'.format(runCode))
 
-                    if runCode is 0:
-                        if self.diff:
-                            if diffCode is 0:
-                                sFile.write(
-                                    'Diff results: outputs are identical.\n\n')
+                        if runCode is 0:
+                            if self.diff:
+                                if diffCode is 0:
+                                    sFile.write(
+                                        'Diff results: outputs are identical.\n\n')
+                                else:
+                                    sFile.write('Diff results:\n')
+                                    sFile.write('Legend:\n')
+                                    sFile.write('-: expected\n')
+                                    sFile.write('+: received\n')
+                                    sFile.write('?: diff results\n\n')
+                                    sFile.writelines(diffResult)
+                                    sFile.write('\n')
                             else:
-                                sFile.write('Diff results:\n')
-                                sFile.write('Legend:\n')
-                                sFile.write('-: expected\n')
-                                sFile.write('+: received\n')
-                                sFile.write('?: diff results\n\n')
-                                sFile.writelines(diffResult)
-                                sFile.write('\n')
+                                sFile.write('# Output for {}\n'.format(
+                                    entry.name))
+                                sFile.write('#=============================#\n')
+                                sFile.write('stdout:\n{}\n\n'.format(runOut))
+                                sFile.write('#=============================#\n')
+                                sFile.write('stderr:\n{}\n\n'.format(runErr))
                         else:
                             sFile.write('# Output for {}\n'.format(entry.name))
                             sFile.write('#=============================#\n')
                             sFile.write('stdout:\n{}\n\n'.format(runOut))
                             sFile.write('#=============================#\n')
                             sFile.write('stderr:\n{}\n\n'.format(runErr))
-                    else:
-                        sFile.write('# Output for {}\n'.format(entry.name))
-                        sFile.write('#=============================#\n')
-                        sFile.write('stdout:\n{}\n\n'.format(runOut))
-                        sFile.write('#=============================#\n')
-                        sFile.write('stderr:\n{}\n\n'.format(runErr))
             else:
                 # TODO: Add support for interpreted languages.
                 print('Error: interpreted languages are not supported yet.')
