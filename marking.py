@@ -88,35 +88,48 @@ def readConfigFile(path):
     conf.root = convertPaths(config['Config']['root'])
     conf.makeCSV = config['Config'].getboolean('makeCSV')
     conf.makeComments = config['Config'].getboolean('makeComments')
+    conf.workingDir = convertPaths(config['Config']['working'])
 
     # Now let's read in the editor
     editor = Editor()
     editor.cmd = config['Editor']['editor']
-    editor.args = config['Editor']['editorArgs']
+
+    # Since the editor args are completely optional, we need to check to
+    # see if the user has provided any.
+    if config.has_option('Editor', 'editorArgs'):
+        editor.args = config['Editor']['editorArgs']
 
     # Now make the Marker
     marker = Marker()
     marker.extension = config['Language']['extension']
+    marker.generatedExtension = config['Language']['generatedExtension']
     marker.isInterpreted = config['Language'].getboolean('isInterpreted')
     marker.compiler = config['Language']['compiler']
     marker.run = config['Language']['run']
     marker.editor = editor
+    marker.workingDir = conf.workingDir
 
-    inFiles = config['IO']['input']
-    inFiles = inFiles.split(';')
-    inf = []
-    for file in inFiles:
-        inf.append(convertPaths(file))
+    # The IO section is optional, so only parse it if needed.
+    if config.has_section('IO'):
+        if config.has_option('IO', 'input'):
+            inFiles = config['IO']['input']
+            inFiles = inFiles.split(';')
+            inf = []
+            for file in inFiles:
+                inf.append(convertPaths(file))
 
-    outFiles = config['IO']['output']
-    outFiles = outFiles.split(';')
-    out = []
-    for file in outFiles:
-        out.append(convertPaths(file))
+            marker.inputFiles = inf
 
-    marker.inputFiles = inf
-    marker.outputFiles = out
-    marker.diff = config['IO'].getboolean('diff')
+        if config.has_option('IO', 'output'):
+            outFiles = config['IO']['output']
+            outFiles = outFiles.split(';')
+            out = []
+            for file in outFiles:
+                out.append(convertPaths(file))
+            marker.outputFiles = out
+
+        if config.has_option('IO', 'diff'):
+            marker.diff = config['IO'].getboolean('diff')
 
     # Finally, we read the rubric.
     rubric = Rubric()
@@ -189,9 +202,12 @@ def main():
     # Only remove the incremental file if we have written everything to
     # the CSV and comment files.
     if conf.makeComments and conf.makeCSV:
-        path = os.path.join(conf.root, 'grades_inc.csv')
-        os.remove(path)
-
+        # At this point in the process we are done with everything, so clean up
+        # the working directory.
+        for file in os.scandir(conf.workingDir):
+            if not file.is_file():
+                continue
+            os.remove(file)
 
 
 if __name__ == '__main__':
