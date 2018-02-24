@@ -22,6 +22,7 @@ class Marker:
         self.diff = False
         self.workingDir = ''
         self.preProcessScript = ''
+        self.auxFiles = []
 
     def convertByteString(self, bytes):
         decoded = False
@@ -232,6 +233,9 @@ class Marker:
             shutil.copy2(file, self.workingDir)
 
         for file in self.outputFiles:
+            shutil.copy2(file, self.workingDir)
+
+        for file in self.auxFiles:
             shutil.copy2(file, self.workingDir)
 
         count = 0

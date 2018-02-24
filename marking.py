@@ -131,6 +131,15 @@ def readConfigFile(path):
         if config.has_option('IO', 'diff'):
             marker.diff = config['IO'].getboolean('diff')
 
+    if config.has_section('Aux'):
+        auxFiles = config['Aux']['files']
+        auxFiles = auxFiles.split(';')
+        aux = []
+        for file in auxFiles:
+            aux.append(convertPaths(file))
+
+        marker.auxFiles = aux
+
     # Finally, we read the rubric.
     rubric = Rubric()
     for key in config['Rubric']:
