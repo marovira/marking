@@ -16,9 +16,9 @@ Currently, the script supports the following:
   file of input is allowed.
 * The script can now generate the appropriate csv and comments files that connex
   needs to set student grades and comments automatically.
+* Can automatically compare the student output with a pre-defined master output.
+* Can include any auxiliary files that are necessary for student submission.
 
 Coming soon:
-* Ability to automatically compare student output with a pre-defined master
-  output (easy).
 * Ability to supply multiple input files to a single student submission.
 * Other features... maybe.
