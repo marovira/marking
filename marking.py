@@ -90,6 +90,7 @@ def readConfigFile(path):
     conf.makeComments = config['Config'].getboolean('makeComments')
     conf.workingDir = convertPaths(config['Config']['working'])
 
+
     # Now let's read in the editor
     editor = Editor()
     editor.cmd = config['Editor']['editor']
@@ -132,13 +133,16 @@ def readConfigFile(path):
             marker.diff = config['IO'].getboolean('diff')
 
     if config.has_section('Aux'):
-        auxFiles = config['Aux']['files']
-        auxFiles = auxFiles.split(';')
-        aux = []
-        for file in auxFiles:
-            aux.append(convertPaths(file))
-
-        marker.auxFiles = aux
+        if config.has_option('Aux', 'files'):
+            auxFiles = config['Aux']['files']
+            auxFiles = auxFiles.split(';')
+            aux = []
+            for file in auxFiles:
+                aux.append(convertPaths(file))
+            marker.auxFiles = aux
+        if config.has_option('Aux', 'script'):
+            script = config['Aux']['script']
+            marker.preProcessScript = convertPaths(script)
 
     # Finally, we read the rubric.
     rubric = Rubric()
