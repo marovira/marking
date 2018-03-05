@@ -238,6 +238,9 @@ class Marker:
         for file in self.auxFiles:
             shutil.copy2(file, self.workingDir)
 
+        if self.preProcessScript:
+            shutil.copy2(self.preProcessScript, self.workingDir)
+
         count = 0
         for entry in os.scandir(rootDir):
             if not entry.is_dir():
