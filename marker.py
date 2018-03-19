@@ -106,7 +106,7 @@ class Marker:
                     runCode, runErr, runOut = self.runFile(name)
 
                     diffResult = []
-                    diffCode = 0
+                    diffCode = -1
                     if runCode is 0 and self.diff:
                         # First load in the output file.
                         outFile = ''
@@ -149,6 +149,8 @@ class Marker:
                                 if diffCode is 1:
                                     sFile.write(
                                         'Diff results: outputs are identical.\n\n')
+                                elif diffCode is -1:
+                                    sFile.write('Could not perform diff.\n\n')
                                 else:
                                     if len(diffResult) == 0:
                                         sFile.write('Diff results\n')
