@@ -7,6 +7,7 @@ from pathlib import Path
 from os.path import basename
 from utils import Config, Editor, Rubric, Process
 import difflib
+import re
 
 class Marker:
     def __init__(self):
@@ -75,11 +76,17 @@ class Marker:
         return runCode, runErr, runOut
 
     def performDiff(self, expected, ans):
+        if len(ans) == 0:
+            return 0, []
+
         d = difflib.Differ()
         diff = list(d.compare(expected, ans))
         if len(diff) != len(expected):
-            return 1, diff
-        return 0, []
+            return 0, diff
+        for line in diff:
+            if re.search('(^[+] .*)|^(- ).*|^([?].*)', line):
+                return 0, diff
+        return 1, []
 
     def runSubmission(self, submission):
         summaryFile = 'summary.txt'
@@ -123,7 +130,7 @@ class Marker:
                 else:
                     mode = 'w'
 
-                with open(summaryFile, mode, newline = '\n') as sFile:
+                with open(summaryFile, mode, newline = '\n', encoding = 'utf-8') as sFile:
                     sFile.write('#=========================================#\n')
                     sFile.write('# Summary for file {}\n'.format(entry.name))
                     sFile.write('#=========================================#\n')
@@ -139,17 +146,21 @@ class Marker:
 
                         if runCode is 0:
                             if self.diff:
-                                if diffCode is 0:
+                                if diffCode is 1:
                                     sFile.write(
                                         'Diff results: outputs are identical.\n\n')
                                 else:
-                                    sFile.write('Diff results:\n')
-                                    sFile.write('Legend:\n')
-                                    sFile.write('-: expected\n')
-                                    sFile.write('+: received\n')
-                                    sFile.write('?: diff results\n\n')
-                                    sFile.writelines(diffResult)
-                                    sFile.write('\n')
+                                    if len(diffResult) == 0:
+                                        sFile.write('Diff results\n')
+                                        sFile.write('Empty diff. No output received from program.')
+                                    else:
+                                        sFile.write('Diff results:\n')
+                                        sFile.write('Legend:\n')
+                                        sFile.write('-: expected\n')
+                                        sFile.write('+: received\n')
+                                        sFile.write('?: diff results\n\n')
+                                        sFile.writelines(diffResult)
+                                        sFile.write('\n')
                             else:
                                 sFile.write('# Output for {}\n'.format(
                                     entry.name))
