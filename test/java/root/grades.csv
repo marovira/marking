@@ -1,0 +1,8 @@
+Test Assignment,Points
+
+Display ID,ID,Last Name,First Name,grade
+V00123450,errorc,Error,Compiler,0.0
+V00123451,errorr,Error,Runtime,0.0
+V00123452,outputdf,DiffF,Output,0.0
+V00123453,outputdc,DiffC,Output,0.0
+V00123454,filei,File,Input,0.0
