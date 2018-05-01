@@ -9,13 +9,43 @@ from utils import Config, Editor, Rubric, Process
 import difflib
 import re
 
-class Marker:
+class JavaMarker:
+    """
+    The marker script for Java submissions.
+
+    Attributes:
+    ----------
+    extension:
+        The extension of Java files.
+    generatedExtension:
+        The extension that Java generates when it compiles.
+    compiler:
+        The Java compiler.
+    run:
+        The Java runtime.
+    editor:
+        An instance of the Editor class.
+    inputFiles:
+        The list of input files for the assignment.
+    runArgs:
+        The arguments when invoking the program.
+    outputFiles:
+        The list of output files for the assignment.
+    diff:
+        Whether to perform the diff or not.
+    workingDir:
+        The directory where we copy all of the files.
+    preProcessScript:
+        The script that needs to be run before the assignment is run.
+    auxFiles:
+        The list of auxiliary files.
+    """
+
     def __init__(self):
-        self.extension = ''
-        self.generatedExtension = ''
-        self.isInterpreted = False
-        self.compiler = ''
-        self.run = ''
+        self.extension = '.java'
+        self.generatedExtension = '.class'
+        self.compiler = 'javac'
+        self.run = 'java'
         self.editor = Editor()
         self.inputFiles = ''
         self.runArgs = []
@@ -26,6 +56,18 @@ class Marker:
         self.auxFiles = []
 
     def convertByteString(self, bytes):
+        """
+        Decodes the given byte string into a regular string.
+
+        Parameters:
+        ---------
+        bytes:
+            The byte string to be decoded.
+
+        Returns:
+        -------
+            The decoded string (if possible)
+        """
         decoded = False
 
         # Try to decode as utf-8
@@ -41,10 +83,22 @@ class Marker:
         return bytes
 
     def compileFile(self, name):
-        compileProc = Popen([self.compiler, name], stdout = PIPE,
-                stdin = PIPE, stderr = PIPE)
-        compileOut, compileErr = compileProc.communicate()
-        compileCode = compileProc.returncode
+        """
+        Compiles the given file.
+
+        Parameters:
+        ----------
+        name:
+            The name of the file to compile.
+
+        Returns:
+        -------
+            The stdout, stderr, and return code of the compiler.
+        """
+        compileProc = Process()
+        compileProc.procName = [self.compiler]
+        compileProc.procArgs = [name]
+        compileOut, compileErr, compileCode = compileProc.runPiped()
 
         compileOut = self.convertByteString(compileOut)
         compileErr = self.convertByteString(compileErr)
@@ -52,8 +106,24 @@ class Marker:
         return compileCode, compileErr, compileOut
 
     def runFile(self, name):
-        runProc = Popen([self.run, name] + [self.runArgs], stdout = PIPE, 
-                stdin = PIPE, stderr = PIPE)
+        """
+        Runs the program after being compiled.
+
+        This will also capture stdout, stderr, and use any input files as
+        stdin.
+
+        Parameters:
+        ----------
+        name:
+            The name of the file to run.
+
+        Returns:
+        -------
+            The stdout, stderr, and return code of the program.
+        """
+        runProc = Process()
+        runProc.procName = [self.run]
+        runProc.procArgs = [name]
         # Check if there is an input file that needs to be used.
         inputFile = ''
         for file in self.inputFiles:
@@ -66,16 +136,31 @@ class Marker:
             with open(inputFile, 'r') as inFile:
                 inLines = inFile.read()
                 inLines = str.encode(inLines)
-                runOut, runErr = runProc.communicate(input = inLines)
+                runOut, runErr, runCode = runProc.runPiped(input = inLines)
         else:
-            runOut, runErr = runProc.communicate()
+            runOut, runErr, runCode = runProc.runPiped()
 
-        runCode = runProc.returncode
         runOut = self.convertByteString(runOut)
         runErr = self.convertByteString(runErr)
         return runCode, runErr, runOut
 
     def performDiff(self, expected, ans):
+        """
+        Performs the diff between the student's output and the master output.
+
+        Parameters:
+        ----------
+        expected:
+            The master output to compare against.
+        ans:
+            The students answer.
+
+        Returns:
+        -------
+            0 if the diff fails, 1 otherwise. It will also return the results of
+            the diff.
+
+        """
         if len(ans) == 0:
             return 0, []
 
@@ -89,6 +174,17 @@ class Marker:
         return 1, []
 
     def runSubmission(self, submission):
+        """
+        Runs the student submission.
+
+        Parameters:
+        ----------
+        submission:
+            The student submission bundle.
+
+        Returns:
+            The list of files for the editor.
+        """
         summaryFile = 'summary.txt'
         fileList = []
 
@@ -97,93 +193,103 @@ class Marker:
                 continue
             fileList.append(entry.name)
 
-            if not self.isInterpreted:
-                compileCode, compileErr, compileOut = self.compileFile(
-                        entry.name)
-                if compileCode is 0:
-                    name = entry.name[:-len(self.extension)]
-                    # TODO: Add support for multiple input files.
-                    runCode, runErr, runOut = self.runFile(name)
+            compileCode, compileErr, compileOut = self.compileFile(
+                    entry.name)
+            if compileCode is 0:
+                name = entry.name[:-len(self.extension)]
+                # TODO: Add support for multiple input files.
+                runCode, runErr, runOut = self.runFile(name)
 
-                    diffResult = []
-                    diffCode = -1
-                    if runCode is 0 and self.diff:
-                        # First load in the output file.
-                        outFile = ''
-                        for file in self.outputFiles:
-                            fName = os.path.splitext(basename(file))[0]
-                            sName = os.path.splitext(basename(entry.name))[0]
-                            if fName == sName:
-                                outFile = file
-                                break
+                diffResult = []
+                diffCode = -1
+                if runCode is 0 and self.diff:
+                    # First load in the output file.
+                    outFile = ''
+                    for file in self.outputFiles:
+                        fName = os.path.splitext(basename(file))[0]
+                        sName = os.path.splitext(basename(entry.name))[0]
+                        if fName == sName:
+                            outFile = file
+                            break
 
-                        if outFile:
-                            with open(outFile, 'r') as oFile:
-                                master = oFile.readlines()
-                            student = runOut.splitlines(keepends = True)
+                    if outFile:
+                        with open(outFile, 'r') as oFile:
+                            master = oFile.readlines()
+                        student = runOut.splitlines(keepends = True)
 
-                            diffCode, diffResult = self.performDiff(master, 
-                                                                    student)
+                        diffCode, diffResult = self.performDiff(master, 
+                                                                student)
 
-                if os.path.exists(summaryFile):
-                    mode = 'a'
+            if os.path.exists(summaryFile):
+                mode = 'a'
+            else:
+                mode = 'w'
+
+            with open(summaryFile, mode, newline = '\n', encoding = 'utf-8') as sFile:
+                sFile.write('#=========================================#\n')
+                sFile.write('# Summary for file {}\n'.format(entry.name))
+                sFile.write('#=========================================#\n')
+
+                if compileCode is not 0:
+                    sFile.write('Compilation error: return code {}\n'.format(
+                        compileCode))
+                    sFile.write('{}\n\n'.format(compileErr))
+                    sFile.write('{}\n\n'.format(compileOut))
                 else:
-                    mode = 'w'
+                    sFile.write('Compilation successful\n')
+                    sFile.write('Program return code: {}\n\n'.format(runCode))
 
-                with open(summaryFile, mode, newline = '\n', encoding = 'utf-8') as sFile:
-                    sFile.write('#=========================================#\n')
-                    sFile.write('# Summary for file {}\n'.format(entry.name))
-                    sFile.write('#=========================================#\n')
-
-                    if compileCode is not 0:
-                        sFile.write('Compilation error: return code {}\n'.format(
-                            compileCode))
-                        sFile.write('{}\n\n'.format(compileErr))
-                        sFile.write('{}\n\n'.format(compileOut))
-                    else:
-                        sFile.write('Compilation successful\n')
-                        sFile.write('Program return code: {}\n\n'.format(runCode))
-
-                        if runCode is 0:
-                            if self.diff:
-                                if diffCode is 1:
-                                    sFile.write(
-                                        'Diff results: outputs are identical.\n\n')
-                                elif diffCode is -1:
-                                    sFile.write('Could not perform diff.\n\n')
-                                else:
-                                    if len(diffResult) == 0:
-                                        sFile.write('Diff results\n')
-                                        sFile.write('Empty diff. No output received from program.')
-                                    else:
-                                        sFile.write('Diff results:\n')
-                                        sFile.write('Legend:\n')
-                                        sFile.write('-: expected\n')
-                                        sFile.write('+: received\n')
-                                        sFile.write('?: diff results\n\n')
-                                        sFile.writelines(diffResult)
-                                        sFile.write('\n')
+                    if runCode is 0:
+                        if self.diff:
+                            if diffCode is 1:
+                                sFile.write(
+                                    'Diff results: outputs are identical.\n\n')
+                            elif diffCode is -1:
+                                sFile.write('Could not perform diff.\n\n')
                             else:
-                                sFile.write('# Output for {}\n'.format(
-                                    entry.name))
-                                sFile.write('#=============================#\n')
-                                sFile.write('stdout:\n{}\n\n'.format(runOut))
-                                sFile.write('#=============================#\n')
-                                sFile.write('stderr:\n{}\n\n'.format(runErr))
+                                if len(diffResult) == 0:
+                                    sFile.write('Diff results\n')
+                                    sFile.write('Empty diff. No output received from program.')
+                                else:
+                                    sFile.write('Diff results:\n')
+                                    sFile.write('Legend:\n')
+                                    sFile.write('-: expected\n')
+                                    sFile.write('+: received\n')
+                                    sFile.write('?: diff results\n\n')
+                                    sFile.writelines(diffResult)
+                                    sFile.write('\n')
                         else:
-                            sFile.write('# Output for {}\n'.format(entry.name))
+                            sFile.write('# Output for {}\n'.format(
+                                entry.name))
                             sFile.write('#=============================#\n')
                             sFile.write('stdout:\n{}\n\n'.format(runOut))
                             sFile.write('#=============================#\n')
                             sFile.write('stderr:\n{}\n\n'.format(runErr))
-            else:
-                # TODO: Add support for interpreted languages.
-                print('Error: interpreted languages are not supported yet.')
-                return
+                    else:
+                        sFile.write('# Output for {}\n'.format(entry.name))
+                        sFile.write('#=============================#\n')
+                        sFile.write('stdout:\n{}\n\n'.format(runOut))
+                        sFile.write('#=============================#\n')
+                        sFile.write('stderr:\n{}\n\n'.format(runErr))
         fileList.append(summaryFile)
         return fileList
 
     def formatForCSV(self, table, rubric):
+        """
+        Formats the current table of students so they can be written into a 
+        CSV file.
+
+        Parameters:
+        ----------
+        table:
+            The table of students and their grades.
+        rubric:
+            The marking rubric to use as template to format the CSV file.
+
+        Returns:
+        -------
+            The header and list of grades ready to be written to CSV.
+        """
         # First make the header.
         header = ['Student']
         for item in rubric.attributes:
@@ -205,6 +311,25 @@ class Marker:
         return header, grades
 
     def writeIncremental(self, table, rubric):
+        """
+        Writes the incremental file.
+
+        This file is used as a backup in case the script crashes (or a break
+        needs to be taken.) It also keeps track of which students have been
+        marked.
+
+        Note:
+        ----
+        This assumes that the students are marked in the order that their
+        directories exist in the root directory.
+
+        Parameters:
+        ----------
+        table:
+            The table of students and their grades.
+        rubric:
+            The sample rubric.
+        """
         header, grades = self.formatForCSV(table, rubric)
         csvFile = os.path.join(self.workingDir, 'grades_inc.csv')
         with open(csvFile, 'w+', newline = '\n') as file:
@@ -213,6 +338,24 @@ class Marker:
             writer.writerows(grades)
 
     def loadIncremental(self, file, masterRubric):
+        """
+        Loads the incremental file.
+
+        This restores the list of grades for students using the incremental
+        file.
+
+        Parameters:
+        ----------
+        file:
+            The name of the incremental file.
+        masterRubric:
+            The master rubric.
+
+        Returns:
+        -------
+            The restored table of students and their grades along with the count
+            of students that were restored.
+        """
         count = 0
         table = []
         with open(file, 'r') as file:
@@ -231,6 +374,25 @@ class Marker:
         return table, count
 
     def mark(self, rootDir, rubric):
+        """
+        This is the main function of the Marker.
+
+        This will iterate over the directory of each student, read their
+        submission, compile and run it. It will then capture their output and
+        diff it. This will then be sent to the editor so the TA can mark the
+        assignment. It can also restore the list using an incremental file.
+
+        Parameters:
+        ----------
+        rootDir:
+            The root of the assignemnts.
+        rubric:
+            The marking rubric to use.
+
+        Returns:
+        -------
+            The table containing all of the students, their marks and comments.
+        """
         table = []
 
         # Check if we have a partial file already.

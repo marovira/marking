@@ -6,9 +6,23 @@ import traceback
 import configparser
 from os.path import basename
 from utils import Config, Editor, Rubric 
-from marker import Marker
+from markers.javamarker import JavaMarker
 
 def convertPaths(path, join = False):
+    """
+    Converts relative paths to absolute paths.
+
+    Parameters:
+    ----------
+    path:
+        The path to convert
+    join:
+        Whether the path should be joined or not.
+
+    Returns:
+    ----------
+        A string containing the absolute path.
+    """
     dir = path
     if join:
         dir = ' '.join(path)
@@ -21,6 +35,19 @@ def convertPaths(path, join = False):
     return dir
 
 def makeComments(grades, root):
+    """
+    Creates the comments.txt file for each student submission.
+
+    This utilizes the comments section from the rubrics to create the
+    corresponding file for each student in the list.
+
+    Parameters:
+    ----------
+    grades:
+        The list of all the rubrics of all the students.
+    root:
+        The root containing the student directories.
+    """
     for entry in os.scandir(root):
         if not entry.is_dir():
             continue
@@ -53,6 +80,16 @@ def makeComments(grades, root):
             file.write('Comments:\n{}'.format(studentRubric.comments))
 
 def makeCSV(grades, root):
+    """
+    Populates the connex generated CSV file with the grades of all students.
+
+    Parameters:
+    ----------
+    grades:
+        The list of rubrics for each student.
+    root:
+        The directory containing the student submissions and the CSV file.
+    """
     filePath = os.path.join(root, 'grades.csv')
     rows = []
     with open(filePath, 'r+') as file:
@@ -80,6 +117,14 @@ def makeCSV(grades, root):
         writer.writerows(rows)
 
 def readConfigFile(path):
+    """
+    Reads the provided ini file and obtains all the details.
+
+    Parameters:
+    ----------
+    path:
+        The path to the ini file.
+    """
     config = configparser.ConfigParser()
     config.read(path)
 
@@ -100,13 +145,13 @@ def readConfigFile(path):
     if config.has_option('Editor', 'editorArgs'):
         editor.args = config['Editor']['editorArgs']
 
-    # Now make the Marker
-    marker = Marker()
-    marker.extension = config['Language']['extension']
-    marker.generatedExtension = config['Language']['generatedExtension']
-    marker.isInterpreted = config['Language'].getboolean('isInterpreted')
-    marker.compiler = config['Language']['compiler']
-    marker.run = config['Language']['run']
+    # Now make the Marker depending on the language that we are using.
+    # TODO: if more languages are needed, this needs to be replaced with a 
+    # dynamic loading of modules.
+    conf.language = config['Language']['name']
+    if conf.language == 'java':
+        marker = JavaMarker()
+
     marker.editor = editor
     marker.workingDir = conf.workingDir
 
@@ -132,6 +177,7 @@ def readConfigFile(path):
         if config.has_option('IO', 'diff'):
             marker.diff = config['IO'].getboolean('diff')
 
+    # The Aux section is also optional.
     if config.has_section('Aux'):
         if config.has_option('Aux', 'files'):
             auxFiles = config['Aux']['files']
@@ -153,35 +199,75 @@ def readConfigFile(path):
     return conf, marker, rubric
 
 def makeSampleConfig():
+    """
+    Creates a sample ini file for the user.
+    """
     with open('sample.ini', 'w+') as file:
-        file.write('# This is a sample config file for the marking script.\n')
-        file.write('# You may use this as a template to build your own.\n')
-        file.write('# Please note that all attributes (save for those under\n')
-        file.write('# the [Rubric] section are reserved keywords).\n')
-        file.write('# Lines that start with \'#\' are comments.\n\n')
-        file.write('[Config]\n')
-        file.write('root = \'path/to/root\'\n')
-        file.write('makeCSV = true\n')
-        file.write('makeComments = true\n')
-        file.write('\n')
-        file.write('[Editor]\n')
-        file.write('editor = \'\'\n')
-        file.write('editorArgs = \'\'\n')
-        file.write('\n')
-        file.write('[Language]\n')
-        file.write('extension = \'\'\n')
-        file.write('isInterpreted = false\n')
-        file.write('compiler = \'\'\n')
-        file.write('run = \'\'\n')
-        file.write('\n')
-        file.write('[IO]\n')
-        file.write('input = \'\'\n')
-        file.write('output = \'\'\n')
-        file.write('diff = false\n')
-        file.write('[Rubric]\n')
-        file.write('# Your elements here.')
+        sample = """
+# This is a sample config file for the marking script. You may use this
+# as a template to build your own config files.
+# Please note that all attributes (save those under the [Rubric] section
+# are reserved keywords).
+# Lines that start with \'#\' are comments.
+
+[Config]
+# Specifies the root directory of the assignments.
+root = path/to/root
+# If true, the script will populate the CSV file with the marks.
+makeCSV = true
+# If true, the script will generate the comments files for all students.
+makeComments = true
+
+[Editor]
+# Specify the executable path of the editor of choice.
+editor = gvim.
+# If your editor requires additional arguments, specify them with
+# editorArgs = args
+
+[Language]
+# This specifies the language. Currently only Java and Python are
+# supported. Please use either \'java\' or \'python\'.
+name = java
+
+# The IO section is optional. Only add this if the assignments require
+# user input and/or you wish to use the diff functionality of the
+# script.
+[IO]
+# The list of files containing the user input for the programs. They
+# must have the same name as the file they are to be used with. Multiple
+# files are separated with a semicolon.
+input = /path/to/file1;/path/to/file2
+# The list of files containing the master output to perform the diff. If
+# diff is set to true, these must be given. As before, the files must
+# have the same name as the file that they are to be used with.
+output = /path/to/file1;/path/to/file2
+# Tells the script whether a diff should be performed between the
+# student's output and the provided master.
+diff = true
+
+# The Aux section is also optional. Add this if the assignment requires:
+# additional instructor provided files (either code or files the
+# students can load), or if a pre-processing script needs to be run
+# prior to testing of the student submission.
+[Aux]
+# The list of additional files. These will be simply copied every time
+# a new student's submission is evaluated.
+files = /path/to/file1;/path/to/file2
+# If a pre-processing script is required, specify it here.
+script = /path/to/script
+
+[Rubric]
+# This is the marking rubric. Each item goes in a separate line, and it
+# must be assigned to the maximum number of marks per item.
+item 1 = 1
+item 2 = 2
+        """
+        file.write(sample)
 
 def main():
+    """
+    Main function of the program.
+    """
     parser = argparse.ArgumentParser(description = 
                                      'Marks assignments in an automatic way.')
     parser.add_argument('-g', '--generate-config', action = 'store_true',
@@ -203,6 +289,7 @@ def main():
 
     # Now that we have the path, let's start setting things up.
     conf, marker, rubric = readConfigFile(configPath)
+
     grades = marker.mark(conf.root, rubric)
 
     # Check if we have to generate the csv files and comment files
