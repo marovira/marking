@@ -6,7 +6,7 @@ import traceback
 import configparser
 from os.path import basename
 from utils import Config, Editor, Rubric 
-from markers.javamarker import JavaMarker
+from javamarker import JavaMarker
 
 def convertPaths(path, join = False):
     """
@@ -287,6 +287,11 @@ def main():
     # We don't, so first let's check the path for the config file.
     configPath = convertPaths(args.config, True)
 
+    # Before we get started, let's switch the directory to the one that holds
+    # the ini file.
+    newPath = os.path.dirname(configPath)
+    os.chdir(newPath)
+
     # Now that we have the path, let's start setting things up.
     conf, marker, rubric = readConfigFile(configPath)
 
@@ -307,7 +312,7 @@ def main():
         for file in os.scandir(conf.workingDir):
             if not file.is_file():
                 continue
-            os.remove(file)
+            os.remove(file.path)
 
 
 if __name__ == '__main__':

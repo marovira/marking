@@ -208,7 +208,7 @@ class JavaMarker:
                     for file in self.outputFiles:
                         fName = os.path.splitext(basename(file))[0]
                         sName = os.path.splitext(basename(entry.name))[0]
-                        if fName == sName:
+                        if fName.lower() == sName.lower():
                             outFile = file
                             break
 
@@ -358,8 +358,8 @@ class JavaMarker:
         """
         count = 0
         table = []
-        with open(file, 'r') as file:
-            reader = csv.reader(file)
+        with open(file, 'r') as inFile:
+            reader = csv.reader(inFile)
             header = next(reader)
             for line in reader:
                 count += 1
@@ -400,21 +400,10 @@ class JavaMarker:
         incFile = Path(incPath)
         start = 0
         if incFile.is_file():
-            table, start = self.loadIncremental(incFile, rubric)
+            table, start = self.loadIncremental(incPath, rubric)
 
         # Next, check copy over any input and output files to the working
         # directory.
-        for file in self.inputFiles:
-            shutil.copy2(file, self.workingDir)
-
-        for file in self.outputFiles:
-            shutil.copy2(file, self.workingDir)
-
-        for file in self.auxFiles:
-            shutil.copy2(file, self.workingDir)
-
-        if self.preProcessScript:
-            shutil.copy2(self.preProcessScript, self.workingDir)
 
         count = 0
         for entry in os.scandir(rootDir):
@@ -430,9 +419,21 @@ class JavaMarker:
                     file.is_file()]
             bundle = [submission]
 
+            for file in self.inputFiles:
+                shutil.copy2(file, self.workingDir)
+
+            for file in self.outputFiles:
+                shutil.copy2(file, self.workingDir)
+
+            for file in self.auxFiles:
+                shutil.copy2(file, self.workingDir)
+
+            if self.preProcessScript:
+                shutil.copy2(self.preProcessScript, self.workingDir)
+
             # Now copy the submission over to the working directory.
             for file in submission:
-                shutil.copy2(file, self.workingDir)
+                shutil.copy2(file.path, self.workingDir)
 
             os.chdir(self.workingDir)
 
@@ -513,7 +514,7 @@ class JavaMarker:
                     continue
                 if self.generatedExtension not in file.name:
                     continue
-                os.remove(file)
+                os.remove(file.path)
 
             print('Done')
 
