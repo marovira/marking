@@ -7,6 +7,7 @@ import configparser
 from os.path import basename
 from utils import Config, Editor, Rubric 
 from javamarker import JavaMarker
+from pythonmarker import PythonMarker
 
 def convertPaths(path, join = False):
     """
@@ -151,6 +152,11 @@ def readConfigFile(path):
     conf.language = config['Language']['name']
     if conf.language == 'java':
         marker = JavaMarker()
+    elif conf.language == 'python':
+        marker = PythonMarker()
+    else:
+        print("Error: language is not supported yet.")
+        return
 
     marker.editor = editor
     marker.workingDir = conf.workingDir
