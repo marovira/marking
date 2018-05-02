@@ -14,7 +14,7 @@ then be uploaded to connex to be released to students.
 ## How does it work?
 Please see the wiki for more information on usage of the script, along with
 guidelines for designing assignments that can use it. The full documentation of
-the source code is coming soon.
+the source code can be seen [here](https://marovira.github.io/marking/)
 
 ## TODO list
 
