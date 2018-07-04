@@ -96,7 +96,7 @@ class JavaMarker:
             The stdout, stderr, and return code of the compiler.
         """
         compileProc = Process()
-        compileProc.procName = [self.compiler]
+        compileProc.procName = self.compiler
         compileProc.procArgs = [name]
         compileOut, compileErr, compileCode = compileProc.runPiped()
 
@@ -122,7 +122,7 @@ class JavaMarker:
             The stdout, stderr, and return code of the program.
         """
         runProc = Process()
-        runProc.procName = [self.run]
+        runProc.procName = self.run
         runProc.procArgs = [name]
         # Check if there is an input file that needs to be used.
         inputFile = ''
